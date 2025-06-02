@@ -1,23 +1,26 @@
 #ifndef GRAFO_H
 #define GRAFO_H
-
+#define TAMANHO_MAX_LINHA 2048
 //------------------------------------------------------------------------------
 // estrutura de dados para representar um grafo
 
+typedef struct vizinho {
+  char *nome_nodo;
+  int  peso;
+  struct vizinho *prox_vizinho;
+} vizinho;
+
+typedef struct lista_adjacencia {
+  char *nome_nodo_ref;
+  struct lista_adjacencia * proxima;
+  vizinho *lista_vizinhos; 
+} lista_adjacencia;
+
+
 typedef struct grafo {
-  int **m;
   char *nome;
-   
+  lista_adjacencia *l; 
 } grafo;
-
-struct lista_adjacencia {
-  char *nome_nodo;
-  struct lista * proxima;
-}
-
-struct lista {
-  char *nome_nodo;
-   
 
 //------------------------------------------------------------------------------
 // lê um grafo de f e o devolve

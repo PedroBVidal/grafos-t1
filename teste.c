@@ -8,7 +8,8 @@ int main(void) {
   grafo *g = le_grafo(stdin);
   char *s;
 
-  printf("grafo: %s\n", nome(g));
+  //printf("grafo: %s\n", nome(g));
+  /*
   printf("%d vertices\n", n_vertices(g));
   printf("%d arestas\n", n_arestas(g));
   printf("%d componentes\n", n_componentes(g));
@@ -25,4 +26,6 @@ int main(void) {
   free(s);
 
   return ! destroi_grafo(g);
+  */
+  return 1;
 }
