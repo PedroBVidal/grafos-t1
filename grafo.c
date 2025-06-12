@@ -3,6 +3,8 @@
 #include <string.h>
 #include "grafo.h"
 
+
+
 //-----------------------------------
 // Função auxiliar: cria cópia da string
 char *copia_str(const char *s) {
@@ -53,10 +55,40 @@ void adicionar_vizinho(lista_adjacencia *v, const char *vizinho_nome, int peso) 
 void adicionar_aresta(grafo *g, char *v1, char *v2, int peso) {
     lista_adjacencia *vert1 = adicionar_vertice(g, v1);
     lista_adjacencia *vert2 = adicionar_vertice(g, v2);
-
+    
     adicionar_vizinho(vert1, v2, peso);
     adicionar_vizinho(vert2, v1, peso);
 }
+
+void dfs(lista_adjacencia *v, char **visitados, grafo *g) {
+    if (v == NULL) return;
+
+    for (int i = 0; visitados[i] != NULL; i++) {
+        if (strcmp(visitados[i], v->nome_nodo_ref) == 0)
+            return; // já visitado
+    }
+
+    // Marcar como visitado
+    int i;
+    for (i = 0; visitados[i] != NULL; i++);
+    visitados[i] = v->nome_nodo_ref;
+
+    // Recursivamente visitar os vizinhos
+    for (vizinho *vz = v->lista_vizinhos; vz != NULL; vz = vz->prox_vizinho) {
+        lista_adjacencia *viz = encontrar_vertice(g, vz->nome_nodo);
+        dfs(viz, visitados, g);
+    }
+}
+
+int indice_vertice(grafo *g, const char *nome) {
+    int i = 0;
+    for (lista_adjacencia *v = g->l; v != NULL; v = v->proxima, i++) {
+        if (strcmp(v->nome_nodo_ref, nome) == 0)
+            return i;
+    }
+    return -1;
+}
+
 
 grafo *le_grafo(FILE *f){
   grafo *g = malloc(sizeof(struct grafo));
@@ -78,7 +110,7 @@ grafo *le_grafo(FILE *f){
       // A primeira linha não comentada é o nome do grafo
       if (primeira_linha) {
           g->nome = copia_str(linha); // <--- esta linha é essencial
-          printf("Nome do grafo: %s\n", g->nome);
+          //printf("Nome do grafo: %s\n", g->nome);
           primeira_linha = 0;
           continue;
       }
@@ -89,17 +121,17 @@ grafo *le_grafo(FILE *f){
       int peso = 0;
       // Tenta ler dois vértices e um peso
       if (sscanf(linha, "%s -- %s %d", vertice1, vertice2, &peso) == 3) {
-          printf("Aresta: %s -- %s, Peso: %d\n", vertice1, vertice2, peso);
+          //printf("Aresta: %s -- %s, Peso: %d\n", vertice1, vertice2, peso);
           adicionar_aresta(g, vertice1, vertice2, peso);
       }
       // Tenta ler apenas dois vértices (peso opcional)
       else if (sscanf(linha, "%s -- %s", vertice1, vertice2) == 2) {
-          printf("Aresta: %s -- %s, Peso: %d\n", vertice1, vertice2, peso);
+          //printf("Aresta: %s -- %s, Peso: %d\n", vertice1, vertice2, peso);
           adicionar_aresta(g, vertice1, vertice2, 0);
       } 
       // Vértice isolado
       else {
-        printf("Vértice isolado: %s\n", linha);
+        //printf("Vértice isolado: %s\n", linha);
         adicionar_vertice(g, linha);
       }
   } 
@@ -150,9 +182,57 @@ char *nome(grafo *g) {
 //------------------------------------------------------------------------------
 // devolve 1 se g é bipartido e 0 caso contrário
 
-unsigned int bipartido(grafo *g){
-  return 1;
+#include <stdbool.h>
+
+unsigned int bipartido(grafo *g) {
+    int n = n_vertices(g);
+    int *cores = malloc(n * sizeof(int));
+    for (int i = 0; i < n; i++) cores[i] = -1;
+
+    // Vetor com ponteiros para acesso rápido por índice
+    lista_adjacencia **vertices = malloc(n * sizeof(lista_adjacencia *));
+    int idx = 0;
+    for (lista_adjacencia *v = g->l; v != NULL; v = v->proxima) {
+        vertices[idx++] = v;
+    }
+
+    // BFS para cada componente
+    for (int i = 0; i < n; i++) {
+        if (cores[i] != -1) continue;
+
+        int *fila = malloc(n * sizeof(int));
+        int ini = 0, fim = 0;
+
+        fila[fim++] = i;
+        cores[i] = 0;
+
+        while (ini < fim) {
+            int atual = fila[ini++];
+            lista_adjacencia *v = vertices[atual];
+
+            for (vizinho *vz = v->lista_vizinhos; vz != NULL; vz = vz->prox_vizinho) {
+                int j = indice_vertice(g, vz->nome_nodo);
+                if (cores[j] == -1) {
+                    cores[j] = 1 - cores[atual];
+                    fila[fim++] = j;
+                } else if (cores[j] == cores[atual]) {
+                    // conflito de cor
+                    free(cores);
+                    free(vertices);
+                    free(fila);
+                    return 0;
+                }
+            }
+        }
+
+        free(fila);
+    }
+
+    free(cores);
+    free(vertices);
+    return 1;
 }
+
 
 //------------------------------------------------------------------------------
 // devolve o número de vértices em g
@@ -181,9 +261,33 @@ unsigned int n_arestas(grafo *g) {
 //------------------------------------------------------------------------------
 // devolve o número de componentes em g
 
-unsigned int n_componentes(grafo *g){
-  return 1;
+unsigned int n_componentes(grafo *g) {
+    unsigned int count = 0;
+
+    // Max número de vértices = quantidade de vértices
+    int max = n_vertices(g);
+    char **visitados = calloc(max + 1, sizeof(char *)); // null-terminated
+
+    for (lista_adjacencia *v = g->l; v != NULL; v = v->proxima) {
+        // Verifica se já foi visitado
+        int ja_foi = 0;
+        for (int i = 0; visitados[i] != NULL; i++) {
+            if (strcmp(visitados[i], v->nome_nodo_ref) == 0) {
+                ja_foi = 1;
+                break;
+            }
+        }
+
+        if (!ja_foi) {
+            dfs(v, visitados, g);
+            count++;
+        }
+    }
+
+    free(visitados);
+    return count;
 }
+
 
 //------------------------------------------------------------------------------
 // devolve uma "string" com os diâmetros dos componentes de g separados por brancos
