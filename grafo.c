@@ -3,41 +3,65 @@
 #include <string.h>
 #include "grafo.h"
 
-
-void inicializar_grafo(grafo *g){
-   
+//-----------------------------------
+// Função auxiliar: cria cópia da string
+char *copia_str(const char *s) {
+    char *c = malloc(strlen(s) + 1);
+    if (c == NULL) {
+        fprintf(stderr, "Erro ao alocar string\n");
+        exit(1);
+    }
+    strcpy(c, s);
+    return c;
+}
+//-----------------------------------
+// Função auxiliar: busca um vértice na lista de adjacência
+lista_adjacencia *encontrar_vertice(grafo *g, const char *nome) {
+    for (lista_adjacencia *v = g->l; v != NULL; v = v->proxima) {
+        if (strcmp(v->nome_nodo_ref, nome) == 0)
+            return v;
+    }
+    return NULL;
 }
 
-void adicionar_aresta(grafo *g, char *v1, char *v2, int peso){
-  if (g->l == NULL){
-    struct lista_adjacencia * l = malloc(sizeof(struct lista_adjacencia));
-    g->l = lista_adjacencia;
-    struct vizinho lista_vizinhos *l_v = malloc(sizeof(struct vizinho)); 
-    g->l->lista_vizinhos = l_v;
-     
-    // Adiciona o primeiro nodo_ref 
-    g->l->nome_nodo_ref = v1;
-    g->l->lista_vizinhos->nome_nodo = v2;
-    g->l->lista_vizinhos->peso = peso;
-    g->l->lista_vizinhos->prox_vizinho = NULL; 
-    // Adiciona o segundo  nodo_ref
-    l = malloc(sizeof(struct lista_adjacencia));
-    g->l->proxima = l;
-    g->l->proxima->nome_nodo_ref = v2;
-    l_v = malloc(sizeof(struct vizinho)); 
-    g->l->proxima->lista_vizinhos = l_v;
-    g->l->proxima->lista_vizinhos->nome_nodo = v1;
-    g->l->proxima->lista_vizinhos->peso = peso;
-    g->l->proxima->lista_vizinhos->prox_vizinhos = NULL;
-    // Ainda nao pronto
-  } 
+//-----------------------------------
+// Função auxiliar: adiciona vértice, se não existir
+lista_adjacencia *adicionar_vertice(grafo *g, const char *nome) {
+    lista_adjacencia *v = encontrar_vertice(g, nome);
+    if (v != NULL) return v;
+
+    lista_adjacencia *novo = malloc(sizeof(lista_adjacencia));
+    novo->nome_nodo_ref = copia_str(nome);
+    novo->lista_vizinhos = NULL;
+    novo->proxima = g->l;
+    g->l = novo;
+    return novo;
 }
 
+//-----------------------------------
+// Função auxiliar: adiciona vizinho ao vértice
+void adicionar_vizinho(lista_adjacencia *v, const char *vizinho_nome, int peso) {
+    vizinho *novo = malloc(sizeof(vizinho));
+    novo->nome_nodo = copia_str(vizinho_nome);
+    novo->peso = peso;
+    novo->prox_vizinho = v->lista_vizinhos;
+    v->lista_vizinhos = novo;
+}
+
+//-----------------------------------
+// Função principal: adiciona uma aresta
+void adicionar_aresta(grafo *g, char *v1, char *v2, int peso) {
+    lista_adjacencia *vert1 = adicionar_vertice(g, v1);
+    lista_adjacencia *vert2 = adicionar_vertice(g, v2);
+
+    adicionar_vizinho(vert1, v2, peso);
+    adicionar_vizinho(vert2, v1, peso);
+}
 
 grafo *le_grafo(FILE *f){
   grafo *g = malloc(sizeof(struct grafo));
   g->l = NULL;
-  inicializar_grafo(g);
+  //inicializar_grafo(g);
    
   char linha[TAMANHO_MAX_LINHA];
   char nome_grafo[TAMANHO_MAX_LINHA];
@@ -53,8 +77,8 @@ grafo *le_grafo(FILE *f){
       
       // A primeira linha não comentada é o nome do grafo
       if (primeira_linha) {
-          strcpy(nome_grafo, linha);
-          printf("Nome do grafo: %s\n", nome_grafo);
+          g->nome = copia_str(linha); // <--- esta linha é essencial
+          printf("Nome do grafo: %s\n", g->nome);
           primeira_linha = 0;
           continue;
       }
@@ -75,9 +99,11 @@ grafo *le_grafo(FILE *f){
       } 
       // Vértice isolado
       else {
-          printf("Vértice isolado: %s\n", linha);
+        printf("Vértice isolado: %s\n", linha);
+        adicionar_vertice(g, linha);
       }
   } 
+  return g;
 
 }
 
@@ -86,16 +112,40 @@ grafo *le_grafo(FILE *f){
 //
 // devolve 1 em caso de sucesso e 0 em caso de erro
 
-unsigned int destroi_grafo(grafo *g){
-  return 1;
+unsigned int destroi_grafo(grafo *g) {
+    if (g == NULL) return 0;
+
+    lista_adjacencia *v = g->l;
+    while (v != NULL) {
+        lista_adjacencia *prox_v = v->proxima;
+
+        // Libera lista de vizinhos
+        vizinho *vz = v->lista_vizinhos;
+        while (vz != NULL) {
+            vizinho *prox_vz = vz->prox_vizinho;
+            free(vz->nome_nodo);
+            free(vz);
+            vz = prox_vz;
+        }
+
+        free(v->nome_nodo_ref);
+        free(v);
+        v = prox_v;
+    }
+
+    free(g->nome);
+    free(g);
+
+    return 1;
 }
 
 //------------------------------------------------------------------------------
 // devolve o nome de g
 
-char *nome(grafo *g){
-  return 1;
+char *nome(grafo *g) {
+    return g->nome;
 }
+
 
 //------------------------------------------------------------------------------
 // devolve 1 se g é bipartido e 0 caso contrário
@@ -107,15 +157,25 @@ unsigned int bipartido(grafo *g){
 //------------------------------------------------------------------------------
 // devolve o número de vértices em g
 
-unsigned int n_vertices(grafo *g){
-  return 1;
+unsigned int n_vertices(grafo *g) {
+    unsigned int count = 0;
+    for (lista_adjacencia *v = g->l; v != NULL; v = v->proxima) {
+        count++;
+    }
+    return count;
 }
 
 //------------------------------------------------------------------------------
 // devolve o número de arestas em g
 
-unsigned int n_arestas(grafo *g){
-  return 1;
+unsigned int n_arestas(grafo *g) {
+    unsigned int count = 0;
+    for (lista_adjacencia *v = g->l; v != NULL; v = v->proxima) {
+        for (vizinho *vz = v->lista_vizinhos; vz != NULL; vz = vz->prox_vizinho) {
+            count++;
+        }
+    }
+    return count / 2;
 }
 
 //------------------------------------------------------------------------------
