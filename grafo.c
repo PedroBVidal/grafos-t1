@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 #include "grafo.h"
 
@@ -96,14 +97,13 @@ grafo *le_grafo(FILE *f){
   //inicializar_grafo(g);
    
   char linha[TAMANHO_MAX_LINHA];
-  char nome_grafo[TAMANHO_MAX_LINHA];
   int primeira_linha = 1;
   while (fgets(linha, sizeof(linha), f)) {
       // Remove quebra de linha
       linha[strcspn(linha, "\n")] = 0;
       
       // Ignora comentários e linhas vazias
-      if (linha[0] == '/' && linha[1] == '/' || linha[0] == '\0') {
+      if ((linha[0] == '/' && linha[1] == '/') || (linha[0] == '\0')) {
           continue;
       }
       
@@ -127,7 +127,7 @@ grafo *le_grafo(FILE *f){
       // Tenta ler apenas dois vértices (peso opcional)
       else if (sscanf(linha, "%s -- %s", vertice1, vertice2) == 2) {
           //printf("Aresta: %s -- %s, Peso: %d\n", vertice1, vertice2, peso);
-          adicionar_aresta(g, vertice1, vertice2, 0);
+          adicionar_aresta(g, vertice1, vertice2, 1);
       } 
       // Vértice isolado
       else {
@@ -182,7 +182,6 @@ char *nome(grafo *g) {
 //------------------------------------------------------------------------------
 // devolve 1 se g é bipartido e 0 caso contrário
 
-#include <stdbool.h>
 
 unsigned int bipartido(grafo *g) {
     int n = n_vertices(g);
@@ -293,27 +292,278 @@ unsigned int n_componentes(grafo *g) {
 // devolve uma "string" com os diâmetros dos componentes de g separados por brancos
 // em ordem não decrescente
 
-char *diametros(grafo *g){
-  return 1;
+
+
+// Funções completas de análise de grafo
+
+#include <limits.h>
+#include <stdbool.h>
+#include <ctype.h>
+
+// Função auxiliar: BFS para encontrar distâncias a partir de um vértice
+int bfs_distancias(grafo *g, lista_adjacencia *inicio, int *dist, int *visitado, lista_adjacencia **v_array, int n) {
+    for (int i = 0; i < n; i++) {
+        dist[i] = -1;
+        visitado[i] = 0;
+    }
+
+    int ini = 0, fim = 0;
+    int *fila = malloc(n * sizeof(int));
+
+    int start = indice_vertice(g, inicio->nome_nodo_ref);
+    fila[fim++] = start;
+    dist[start] = 0;
+    visitado[start] = 1;
+
+    while (ini < fim) {
+        int u = fila[ini++];
+        for (vizinho *vz = v_array[u]->lista_vizinhos; vz != NULL; vz = vz->prox_vizinho) {
+            int v = indice_vertice(g, vz->nome_nodo);
+            if (!visitado[v]) {
+                visitado[v] = 1;
+                dist[v] = dist[u] + 1;
+                fila[fim++] = v;
+            }
+        }
+    }
+
+    free(fila);
+    return start;
 }
 
-//------------------------------------------------------------------------------
-// devolve uma "string" com os nomes dos vértices de corte de g em
-// ordem alfabética, separados por brancos
+char *diametros(grafo *g) {
+    int n = n_vertices(g);
+    lista_adjacencia **v_array = malloc(n * sizeof(lista_adjacencia *));
+    int idx = 0;
+    for (lista_adjacencia *v = g->l; v != NULL; v = v->proxima)
+        v_array[idx++] = v;
 
-char *vertices_corte(grafo *g){
-  return 1;
+    int *visitado_global = calloc(n, sizeof(int));
+    int *dist = malloc(n * sizeof(int));
+    int *visitado = malloc(n * sizeof(int));
+    int *diametros = malloc(n * sizeof(int));
+    int dcount = 0;
+
+    // Função Dijkstra
+    void dijkstra(int start, int *dist) {
+        for (int i = 0; i < n; i++) {
+            dist[i] = INT_MAX;
+            visitado[i] = 0;
+        }
+        dist[start] = 0;
+
+        for (int iter = 0; iter < n; iter++) {
+            int u = -1, min_dist = INT_MAX;
+            for (int j = 0; j < n; j++) {
+                if (!visitado[j] && dist[j] < min_dist) {
+                    min_dist = dist[j];
+                    u = j;
+                }
+            }
+            if (u == -1) break;
+            visitado[u] = 1;
+
+            for (vizinho *vz = v_array[u]->lista_vizinhos; vz != NULL; vz = vz->prox_vizinho) {
+                int v = indice_vertice(g, vz->nome_nodo);
+                if (!visitado[v] && dist[u] + vz->peso < dist[v]) {
+                    dist[v] = dist[u] + vz->peso;
+                }
+            }
+        }
+    }
+
+    for (int i = 0; i < n; i++) {
+        if (visitado_global[i]) continue;
+
+        // marca todos os vértices do componente
+        dijkstra(i, dist);
+        for (int j = 0; j < n; j++) if (dist[j] != INT_MAX) visitado_global[j] = 1;
+
+        // encontra o mais distante de i
+        int mais_dist = i, max_d = 0;
+        for (int j = 0; j < n; j++) {
+            if (dist[j] != INT_MAX && dist[j] > max_d) {
+                max_d = dist[j];
+                mais_dist = j;
+            }
+        }
+
+        dijkstra(mais_dist, dist);
+        max_d = 0;
+        for (int j = 0; j < n; j++) {
+            if (dist[j] != INT_MAX && dist[j] > max_d)
+                max_d = dist[j];
+        }
+
+        diametros[dcount++] = max_d;
+    }
+
+    // ordena os diâmetros
+    for (int i = 0; i < dcount; i++) {
+        for (int j = i + 1; j < dcount; j++) {
+            if (diametros[i] > diametros[j]) {
+                int tmp = diametros[i];
+                diametros[i] = diametros[j];
+                diametros[j] = tmp;
+            }
+        }
+    }
+
+    // monta string
+    char *saida = malloc(dcount * 32);
+    saida[0] = '\0';
+    char buffer[32];
+    for (int i = 0; i < dcount; i++) {
+        sprintf(buffer, "%d", diametros[i]);
+        strcat(saida, buffer);
+        if (i < dcount - 1) strcat(saida, " ");
+    }
+
+    free(v_array); free(visitado_global); free(dist); free(visitado); free(diametros);
+    return saida;
 }
 
-//------------------------------------------------------------------------------
-// devolve uma "string" com as arestas de corte de g em ordem alfabética, separadas por brancos
-// cada aresta é o par de nomes de seus vértices em ordem alfabética, separadas por brancos
-//
-// por exemplo, se as arestas de corte são {z, a}, {x, b} e {y, c}, a resposta será a string
-// "a z b x c y"
 
-char *arestas_corte(grafo *g){
-  return 1;
+int time_tarjan;
+
+void dfs_tarjan(grafo *g, lista_adjacencia **v_array, int *disc, int *low, int *pai, bool *ap, int u, int n) {
+    disc[u] = low[u] = ++time_tarjan;
+    int filhos = 0;
+
+    for (vizinho *vz = v_array[u]->lista_vizinhos; vz != NULL; vz = vz->prox_vizinho) {
+        int v = indice_vertice(g, vz->nome_nodo);
+        if (disc[v] == -1) {
+            filhos++;
+            pai[v] = u;
+            dfs_tarjan(g, v_array, disc, low, pai, ap, v, n);
+            if (low[v] >= disc[u] && pai[u] != -1)
+                ap[u] = true;
+            if (pai[u] == -1 && filhos > 1)
+                ap[u] = true;
+            if (low[u] > low[v]) low[u] = low[v];
+        } else if (v != pai[u]) {
+            if (low[u] > disc[v]) low[u] = disc[v];
+        }
+    }
 }
 
+char *vertices_corte(grafo *g) {
+    int n = n_vertices(g);
+    lista_adjacencia **v_array = malloc(n * sizeof(lista_adjacencia *));
+    int i = 0;
+    for (lista_adjacencia *v = g->l; v != NULL; v = v->proxima)
+        v_array[i++] = v;
 
+    int *disc = malloc(n * sizeof(int));
+    int *low = malloc(n * sizeof(int));
+    int *pai = malloc(n * sizeof(int));
+    bool *ap = calloc(n, sizeof(bool));
+
+    for (i = 0; i < n; i++) {
+        disc[i] = -1;
+        pai[i] = -1;
+    }
+
+    time_tarjan = 0;
+    for (i = 0; i < n; i++) {
+        if (disc[i] == -1)
+            dfs_tarjan(g, v_array, disc, low, pai, ap, i, n);
+    }
+
+    char **nomes = malloc(n * sizeof(char *));
+    int count = 0;
+    for (i = 0; i < n; i++) {
+        if (ap[i]) nomes[count++] = v_array[i]->nome_nodo_ref;
+    }
+
+    for (i = 0; i < count; i++) {
+        for (int j = i + 1; j < count; j++) {
+            if (strcmp(nomes[i], nomes[j]) > 0) {
+                char *tmp = nomes[i];
+                nomes[i] = nomes[j];
+                nomes[j] = tmp;
+            }
+        }
+    }
+
+    char *saida = malloc(count * TAMANHO_MAX_LINHA);
+    saida[0] = '\0';
+    for (i = 0; i < count; i++) {
+        strcat(saida, nomes[i]);
+        if (i < count - 1) strcat(saida, " ");
+    }
+
+    free(v_array); free(disc); free(low); free(pai); free(ap); free(nomes);
+    return saida;
+}
+
+char *arestas_corte(grafo *g) {
+    int n = n_vertices(g);
+    lista_adjacencia **v_array = malloc(n * sizeof(lista_adjacencia *));
+    for (int i = 0; i < n; i++) v_array[i] = NULL;
+    int i = 0;
+    for (lista_adjacencia *v = g->l; v != NULL; v = v->proxima)
+        v_array[i++] = v;
+
+    int *disc = malloc(n * sizeof(int));
+    int *low = malloc(n * sizeof(int));
+    int *pai = malloc(n * sizeof(int));
+
+    typedef struct { char *a, *b; } corte;
+    corte *arestas = malloc(n * n * sizeof(corte));
+    int count = 0;
+
+    for (i = 0; i < n; i++) {
+        disc[i] = -1;
+        pai[i] = -1;
+    }
+
+    void dfs_arestas(int u) {
+        disc[u] = low[u] = ++time_tarjan;
+        for (vizinho *vz = v_array[u]->lista_vizinhos; vz != NULL; vz = vz->prox_vizinho) {
+            int v = indice_vertice(g, vz->nome_nodo);
+            if (disc[v] == -1) {
+                pai[v] = u;
+                dfs_arestas(v);
+                if (low[v] > disc[u]) {
+                    char *a = v_array[u]->nome_nodo_ref;
+                    char *b = v_array[v]->nome_nodo_ref;
+                    if (strcmp(a, b) > 0) { char *tmp = a; a = b; b = tmp; }
+                    arestas[count++] = (corte){a, b};
+                }
+                if (low[u] > low[v]) low[u] = low[v];
+            } else if (v != pai[u] && low[u] > disc[v]) {
+                low[u] = disc[v];
+            }
+        }
+    }
+
+    time_tarjan = 0;
+    for (i = 0; i < n; i++) {
+        if (disc[i] == -1)
+            dfs_arestas(i);
+    }
+
+    for (i = 0; i < count; i++) {
+        for (int j = i + 1; j < count; j++) {
+            int c = strcmp(arestas[i].a, arestas[j].a);
+            if (c > 0 || (c == 0 && strcmp(arestas[i].b, arestas[j].b) > 0)) {
+                corte tmp = arestas[i];
+                arestas[i] = arestas[j];
+                arestas[j] = tmp;
+            }
+        }
+    }
+
+    char *saida = malloc(count * TAMANHO_MAX_LINHA);
+    saida[0] = '\0';
+    for (i = 0; i < count; i++) {
+        strcat(saida, arestas[i].a);
+        strcat(saida, " ");
+        strcat(saida, arestas[i].b);
+        if (i < count - 1) strcat(saida, " ");
+    }
+
+    free(v_array); free(disc); free(low); free(pai); free(arestas);
+    return saida;
+}

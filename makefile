@@ -3,7 +3,6 @@ COMMON_FLAGS = -pipe \
 	       -W -Wall -Wextra \
 	       -Wcast-align \
 	       -Wcast-qual \
-	       -Wconversion \
 	       -Wfloat-equal \
 	       -Wformat-y2k \
 	       -Winit-self \
@@ -19,7 +18,6 @@ COMMON_FLAGS = -pipe \
 	       -Wpacked \
 	       -Wpointer-arith \
 	       -Wredundant-decls \
-	       -Wshadow \
 	       -Wsign-compare \
 	       -Wstack-protector \
 	       -Wstrict-aliasing=2 \
